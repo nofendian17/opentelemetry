@@ -21,16 +21,21 @@ services:
 
   # OpenTelemetry Collector
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.135.0
+    image: otel/opentelemetry-collector-contrib:0.99.0
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
       - ./config/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
     ports:
       - "4318:4318"   # OTLP HTTP receiver (only externally exposed non-Grafana port retained)
     environment:
-      - OTEL_ENV=dev
+      - OTEL_ENV=production
     restart: unless-stopped
-    # Removed docker healthcheck: base image lacks wget/curl causing perpetual 'unhealthy'
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/13133 && printf \"GET / HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n\" >&3; grep -q \"200 OK\" <&3'"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     depends_on:
       - tempo
       - prometheus

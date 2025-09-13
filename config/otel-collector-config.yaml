@@ -5,9 +5,6 @@ receivers:
         endpoint: 0.0.0.0:4318
 
 exporters:
-  debug:
-    verbosity: detailed
-
   # Export traces to Tempo (OTLP gRPC)
   otlp/tempo:
     endpoint: tempo:4317
@@ -19,6 +16,12 @@ exporters:
     endpoint: 0.0.0.0:8889
     const_labels:
       collector: otel-collector
+
+  # Export logs to Loki
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
+    tls:
+      insecure: true
 
 processors:
   memory_limiter:
@@ -38,6 +41,7 @@ processors:
 
 extensions:
   health_check:
+    endpoint: :13133
   pprof:
     endpoint: :1777
   zpages:
@@ -49,9 +53,14 @@ service:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, resourcedetection, attributes/add-env, batch]
-      exporters: [debug, otlp/tempo]
+      exporters: [otlp/tempo]
 
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, resourcedetection, attributes/add-env, batch]
-      exporters: [debug, prometheus]
+      exporters: [prometheus]
+
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, attributes/add-env, batch]
+      exporters: [loki]
