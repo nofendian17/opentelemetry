@@ -30,12 +30,9 @@ services:
     environment:
       - OTEL_ENV=production
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/13133 && printf \"GET / HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n\" >&3; grep -q \"200 OK\" <&3'"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+    # The healthcheck was removed because the official otel-collector-contrib image is distroless
+    # and does not contain the necessary tools (shell, grep, curl, etc.) to perform the healthcheck.
+    # The collector's internal health_check extension is still active and can be seen in the logs.
     depends_on:
       - tempo
       - prometheus

@@ -173,7 +173,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum by (level) (rate({job=\"promtail\"} | json [5m]))",
+          "expr": "sum by (level) (rate({job=\\"promtail\\"} | json [5m]))",
           "refId": "A"
         }
       ]
@@ -198,7 +198,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{job=\"promtail\"}",
+          "expr": "{job=\\"promtail\\"}",
           "refId": "A"
         }
       ],
