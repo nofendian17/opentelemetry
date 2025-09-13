@@ -1,0 +1,57 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+exporters:
+  debug:
+    verbosity: detailed
+
+  # Export traces to Tempo (OTLP gRPC)
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+  # Export metrics to Prometheus (scraped by Prometheus server)
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    const_labels:
+      collector: otel-collector
+
+processors:
+  memory_limiter:
+    check_interval: 2s
+    limit_mib: 400
+    spike_limit_mib: 100
+  resourcedetection:
+    detectors: [env, system]
+    timeout: 5s
+    override: false
+  attributes/add-env:
+    actions:
+      - key: deployment.environment
+        value: ${OTEL_ENV}
+        action: upsert
+  batch:
+
+extensions:
+  health_check:
+  pprof:
+    endpoint: :1777
+  zpages:
+    endpoint: :55679
+
+service:
+  extensions: [pprof, zpages, health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, attributes/add-env, batch]
+      exporters: [debug, otlp/tempo]
+
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, attributes/add-env, batch]
+      exporters: [debug, prometheus]
