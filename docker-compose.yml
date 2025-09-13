@@ -21,16 +21,18 @@ services:
 
   # OpenTelemetry Collector
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.135.0
+    image: otel/opentelemetry-collector-contrib:0.99.0
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
       - ./config/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
     ports:
       - "4318:4318"   # OTLP HTTP receiver (only externally exposed non-Grafana port retained)
     environment:
-      - OTEL_ENV=dev
+      - OTEL_ENV=production
     restart: unless-stopped
-    # Removed docker healthcheck: base image lacks wget/curl causing perpetual 'unhealthy'
+    # The healthcheck was removed because the official otel-collector-contrib image is distroless
+    # and does not contain the necessary tools (shell, grep, curl, etc.) to perform the healthcheck.
+    # The collector's internal health_check extension is still active and can be seen in the logs.
     depends_on:
       - tempo
       - prometheus
