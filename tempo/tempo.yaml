@@ -25,10 +25,10 @@ storage:
       path: /var/tempo
     wal:
       path: /var/tempo/wal
-    search: {}   # <-- ini yang enable trace search
+    search: { }   # <-- ini yang enable trace search
 
 overrides:
-  metrics_generator_processors: [service-graphs, span-metrics, local-blocks]
+  metrics_generator_processors: [ service-graphs, span-metrics, local-blocks ]
 
 metrics_generator:
   registry:

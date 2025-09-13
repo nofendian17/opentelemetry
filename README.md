@@ -1,10 +1,12 @@
 # OpenTelemetry Observability Stack
 
-A complete observability solution using OpenTelemetry with logs, metrics, and traces (the "three pillars") visualized in Grafana.
+A complete observability solution using OpenTelemetry with logs, metrics, and traces (the "three pillars") visualized in
+Grafana.
 
 ## Overview
 
 This project provides a ready-to-use observability stack that includes:
+
 - **OpenTelemetry Collector** - Receives telemetry data via OTLP (port 4318)
 - **Tempo** - Distributed tracing backend
 - **Prometheus** - Metrics storage and querying
@@ -33,15 +35,15 @@ graph TD
 
 ## Services
 
-| Service | Port | Description |
-|---------|------|-------------|
-| Grafana | 3000 | Visualization UI (admin:admin) |
-| OTLP Receiver | 4318 | OpenTelemetry Collector HTTP receiver |
-| Node Exporter | 9100 | System metrics exporter |
-| Prometheus | Internal | Metrics storage |
-| Tempo | Internal | Distributed tracing backend |
-| Loki | Internal | Log aggregation system |
-| Promtail | Internal | Log shipper |
+| Service       | Port     | Description                           |
+|---------------|----------|---------------------------------------|
+| Grafana       | 3000     | Visualization UI (admin:admin)        |
+| OTLP Receiver | 4318     | OpenTelemetry Collector HTTP receiver |
+| Node Exporter | 9100     | System metrics exporter               |
+| Prometheus    | Internal | Metrics storage                       |
+| Tempo         | Internal | Distributed tracing backend           |
+| Loki          | Internal | Log aggregation system                |
+| Promtail      | Internal | Log shipper                           |
 
 ## Quick Start
 
@@ -57,39 +59,47 @@ graph TD
 ## Configuration
 
 ### OpenTelemetry Collector
+
 - Config file: `config/otel-collector-config.yaml`
 - Receives OTLP data on port 4318 (HTTP)
 - Exports metrics to Prometheus (port 8889)
 - Exports traces to Tempo (port 4317)
-- Note: Docker healthcheck is disabled due to distroless image limitations; internal health_check extension is still active
+- Note: Docker healthcheck is disabled due to distroless image limitations; internal health_check extension is still
+  active
 
 ### Tempo (Tracing)
+
 - Config file: `tempo/tempo.yaml`
 - Stores traces locally in `/var/tempo`
 - Retention: 24 hours
 
 ### Prometheus (Metrics)
+
 - Config file: `prometheus/prometheus.yml`
 - Scrapes metrics from OpenTelemetry Collector and Node Exporter
 - Retention: 200 hours
 
 ### Loki (Logs)
+
 - Config file: `loki/loki-config.yaml`
 - Stores logs in filesystem
 - Receives logs from Promtail
 
 ### Promtail (Log Shipping)
+
 - Config file: `loki/promtail.yaml`
 - Ships Docker container logs to Loki
 - Extracts structured fields from JSON logs
 
 ### Node Exporter (System Metrics)
+
 - Collects system-level metrics from the host
 - Exports metrics on port 9100
 - Monitors CPU, memory, disk, network, and filesystem metrics
 - Scraped by Prometheus for host monitoring
 
 ### Grafana
+
 - Data sources configured for Prometheus, Tempo, and Loki
 - Pre-provisioned dashboard for Go application observability
 - Credentials: admin:admin
@@ -97,6 +107,7 @@ graph TD
 ## Grafana Dashboards
 
 The stack includes a pre-provisioned dashboard for Go application observability with panels for:
+
 - Request rate and error rate
 - Latency metrics (p50, p90, p95, p99)
 - Runtime metrics (goroutines, GC pauses, heap allocation)
@@ -108,40 +119,49 @@ The stack includes a pre-provisioned dashboard for Go application observability 
 1. Applications send telemetry data (logs, metrics, traces) via OTLP to the OpenTelemetry Collector
 2. Node Exporter collects system-level metrics from the host system
 3. Collector processes and exports data to the appropriate backends:
-   - Metrics → Prometheus
-   - Traces → Tempo
-   - Logs → Loki (via Promtail for container logs)
+    - Metrics → Prometheus
+    - Traces → Tempo
+    - Logs → Loki (via Promtail for container logs)
 4. Prometheus scrapes metrics from both the Collector and Node Exporter
 5. Grafana queries data from all backends for visualization
 
 ## Customization
 
 ### Adding Services
+
 To add new services, modify the `docker-compose.yml` file and update the relevant configuration files.
 
 ### Modifying Dashboards
+
 Edit `grafana/provisioning/dashboards/app-observability.json` or add new dashboard files to the same directory.
 
 ### Changing Retention
+
 Update retention settings in the respective configuration files:
+
 - Tempo: `tempo/tempo.yaml` (`block_retention`)
 - Prometheus: `prometheus/prometheus.yml` (`storage.tsdb.retention.time`)
 
 ## Troubleshooting
 
 ### Health Checks
+
 All services have health checks configured. Check service status with:
+
 ```bash
 docker compose ps
 ```
 
 ### Logs
+
 View logs for any service:
+
 ```bash
 docker compose logs <service-name>
 ```
 
 ### Common Issues
+
 1. If Grafana can't connect to data sources, ensure all services are running:
    ```bash
    docker compose ps
@@ -154,16 +174,18 @@ docker compose logs <service-name>
 
 ## Ports Reference
 
-| External Port | Service | Purpose |
-|---------------|---------|---------|
-| 3000 | Grafana | Web UI |
-| 4318 | OTLP Receiver | Telemetry ingestion |
-| 9100 | Node Exporter | System metrics |
+| External Port | Service              | Purpose             |
+|---------------|----------------------|---------------------|
+| 3000          | Grafana              | Web UI              |
+| 4317          | OTLP Receiver (GRPC) | Telemetry ingestion |
+| 4318          | OTLP Receiver (HTTP) | Telemetry ingestion |
 
 Internal ports (not exposed):
+
 - Prometheus: 9090
 - Tempo: 3200
 - Loki: 3100
+- Node Exporter: 9100
 
 ## License
 
