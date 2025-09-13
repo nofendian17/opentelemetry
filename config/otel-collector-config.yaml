@@ -3,6 +3,8 @@ receivers:
     protocols:
       http:
         endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
 
 exporters:
   # Export traces to Tempo (OTLP gRPC)
@@ -29,7 +31,7 @@ processors:
     limit_mib: 400
     spike_limit_mib: 100
   resourcedetection:
-    detectors: [env, system]
+    detectors: [ env, system ]
     timeout: 5s
     override: false
   attributes/add-env:
@@ -48,19 +50,19 @@ extensions:
     endpoint: :55679
 
 service:
-  extensions: [pprof, zpages, health_check]
+  extensions: [ pprof, zpages, health_check ]
   pipelines:
     traces:
-      receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, attributes/add-env, batch]
-      exporters: [otlp/tempo]
+      receivers: [ otlp ]
+      processors: [ memory_limiter, resourcedetection, attributes/add-env, batch ]
+      exporters: [ otlp/tempo ]
 
     metrics:
-      receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, attributes/add-env, batch]
-      exporters: [prometheus]
+      receivers: [ otlp ]
+      processors: [ memory_limiter, resourcedetection, attributes/add-env, batch ]
+      exporters: [ prometheus ]
 
     logs:
-      receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, attributes/add-env, batch]
-      exporters: [loki]
+      receivers: [ otlp ]
+      processors: [ memory_limiter, resourcedetection, attributes/add-env, batch ]
+      exporters: [ loki ]

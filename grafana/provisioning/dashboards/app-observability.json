@@ -17,7 +17,12 @@
       "type": "stat",
       "title": "Request Rate (req/s)",
       "id": 1,
-      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
       "targets": [
         {
           "expr": "rate(http_server_requests_total[5m])",
@@ -29,7 +34,12 @@
       "type": "stat",
       "title": "Error Rate (5xx / s)",
       "id": 2,
-      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
       "targets": [
         {
           "expr": "rate(http_server_errors_total[5m])",
@@ -41,7 +51,12 @@
       "type": "stat",
       "title": "Inflight Requests",
       "id": 3,
-      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
       "targets": [
         {
           "expr": "sum(http_server_inflight_requests)"
@@ -52,7 +67,12 @@
       "type": "stat",
       "title": "P95 Latency (s)",
       "id": 4,
-      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
       "targets": [
         {
           "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))"
@@ -63,7 +83,12 @@
       "type": "timeseries",
       "title": "Request Duration Histogram (avg)",
       "id": 5,
-      "gridPos": { "x": 0, "y": 4, "w": 10, "h": 8 },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 10,
+        "h": 8
+      },
       "targets": [
         {
           "expr": "rate(http_server_request_duration_seconds_sum[5m]) / rate(http_server_request_duration_seconds_count[5m])",
@@ -75,7 +100,12 @@
       "type": "timeseries",
       "title": "Requests by Route",
       "id": 6,
-      "gridPos": { "x": 10, "y": 4, "w": 14, "h": 8 },
+      "gridPos": {
+        "x": 10,
+        "y": 4,
+        "w": 14,
+        "h": 8
+      },
       "targets": [
         {
           "expr": "sum by (http_route) (rate(http_server_requests_total[5m]))",
@@ -87,7 +117,12 @@
       "type": "timeseries",
       "title": "Runtime: Goroutines",
       "id": 7,
-      "gridPos": { "x": 0, "y": 12, "w": 8, "h": 6 },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 8,
+        "h": 6
+      },
       "targets": [
         {
           "expr": "go_runtime_go_goroutines"
@@ -98,7 +133,12 @@
       "type": "timeseries",
       "title": "Runtime: GC Pauses (s)",
       "id": 8,
-      "gridPos": { "x": 8, "y": 12, "w": 8, "h": 6 },
+      "gridPos": {
+        "x": 8,
+        "y": 12,
+        "w": 8,
+        "h": 6
+      },
       "targets": [
         {
           "expr": "rate(go_runtime_gc_pause_total_seconds_sum[5m])"
@@ -109,7 +149,12 @@
       "type": "timeseries",
       "title": "Runtime: Heap / Alloc (bytes)",
       "id": 9,
-      "gridPos": { "x": 16, "y": 12, "w": 8, "h": 6 },
+      "gridPos": {
+        "x": 16,
+        "y": 12,
+        "w": 8,
+        "h": 6
+      },
       "targets": [
         {
           "expr": "go_runtime_memory_heap_alloc_bytes",
@@ -121,7 +166,12 @@
       "type": "table",
       "title": "Errors by Route (5xx)",
       "id": 10,
-      "gridPos": { "x": 0, "y": 18, "w": 12, "h": 6 },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 12,
+        "h": 6
+      },
       "targets": [
         {
           "expr": "sum by (http_route) (increase(http_server_errors_total[15m]))",
@@ -133,7 +183,12 @@
       "type": "table",
       "title": "Latency Percentiles",
       "id": 11,
-      "gridPos": { "x": 12, "y": 18, "w": 12, "h": 6 },
+      "gridPos": {
+        "x": 12,
+        "y": 18,
+        "w": 12,
+        "h": 6
+      },
       "targets": [
         {
           "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
@@ -236,9 +291,18 @@
   ],
   "refresh": "30s",
   "schemaVersion": 38,
-  "tags": ["opentelemetry", "go", "demo"],
-  "templating": { "list": [] },
-  "time": { "from": "now-30m", "to": "now" },
+  "tags": [
+    "opentelemetry",
+    "go",
+    "demo"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "",
   "title": "Go Service Observability",

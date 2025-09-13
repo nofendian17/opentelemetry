@@ -9,7 +9,7 @@ datasources:
     orgId: 1
     url: http://prometheus:9090
     basicAuth: false
-    isDefault: true
+    isDefault: false
     version: 1
     editable: true
 
@@ -20,7 +20,7 @@ datasources:
     orgId: 1
     url: http://loki:3100
     basicAuth: false
-    isDefault: false
+    isDefault: true
     version: 1
     editable: true
     jsonData:

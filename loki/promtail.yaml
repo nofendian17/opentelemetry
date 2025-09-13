@@ -38,8 +38,8 @@ scrape_configs:
       #    action: drop
 
     relabel_configs:
-      - source_labels: ['__meta_docker_container_name']
+      - source_labels: [ '__meta_docker_container_name' ]
         regex: '/(.*)'
         target_label: 'container'
-      - source_labels: ['__meta_docker_container_image']
+      - source_labels: [ '__meta_docker_container_image' ]
         target_label: 'image'
