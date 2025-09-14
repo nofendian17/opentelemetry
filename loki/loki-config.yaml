@@ -14,25 +14,40 @@ common:
     kvstore:
       store: inmemory
 
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+
+limits_config:
+  metric_aggregation_enabled: true
+  allow_structured_metadata: true
+  volume_enabled: true
+  retention_period: 672h
+  otlp_config:
+    resource_attributes:
+      attributes_config:
+        - action: index_label
+          attributes:
+          - service.group
+
 schema_config:
   configs:
     - from: 2020-10-24
-      store: boltdb-shipper
+      store: tsdb
       object_store: filesystem
-      schema: v11
+      schema: v13
       index:
         prefix: index_
         period: 24h
 
-limits_config:
-  volume_enabled: true
-  allow_structured_metadata: false
-  retention_period: 2160h   # 90 hari
+pattern_ingester:
+  enabled: true
+  metric_aggregation:
+    loki_address: localhost:3100
 
 ruler:
-  alertmanager_url: http://localhost:9093
-
-compactor:
-  working_directory: /tmp/loki/compactor
-  retention_enabled: true
-  delete_request_store: filesystem   # <--- tambah ini
+  enable_alertmanager_discovery: true
+  enable_api: true

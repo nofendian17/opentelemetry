@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -124,7 +125,7 @@ func (h *UsersHandler) getUserByID(w http.ResponseWriter, r *http.Request, idStr
 	// Get user from user service
 	user, err := h.userService.GetByID(ctx, id)
 	if err != nil {
-		if err == repository.ErrUserNotFound {
+		if errors.Is(err, repository.ErrUserNotFound) {
 			http.Error(w, "User not found", http.StatusNotFound)
 			return
 		}
@@ -184,7 +185,7 @@ func (h *UsersHandler) createUser(w http.ResponseWriter, r *http.Request) {
 	// Create user through user service
 	err := h.userService.Create(ctx, &user)
 	if err != nil {
-		if err == repository.ErrUserAlreadyExists {
+		if errors.Is(err, repository.ErrUserAlreadyExists) {
 			http.Error(w, "User already exists", http.StatusConflict)
 			return
 		}
@@ -259,11 +260,11 @@ func (h *UsersHandler) updateUser(w http.ResponseWriter, r *http.Request) {
 	// Update user through user service
 	err = h.userService.Update(ctx, &user)
 	if err != nil {
-		if err == repository.ErrUserNotFound {
+		if errors.Is(err, repository.ErrUserNotFound) {
 			http.Error(w, "User not found", http.StatusNotFound)
 			return
 		}
-		if err == repository.ErrUserAlreadyExists {
+		if errors.Is(err, repository.ErrUserAlreadyExists) {
 			http.Error(w, "User with this email already exists", http.StatusConflict)
 			return
 		}
@@ -328,7 +329,7 @@ func (h *UsersHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
 	// Delete user through user service
 	err = h.userService.Delete(ctx, id)
 	if err != nil {
-		if err == repository.ErrUserNotFound {
+		if errors.Is(err, repository.ErrUserNotFound) {
 			http.Error(w, "User not found", http.StatusNotFound)
 			return
 		}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"time"
 
 	"go-app/internal/infrastructure/config"
@@ -13,7 +12,6 @@ import (
 	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
@@ -34,11 +32,12 @@ import (
 )
 
 const (
-	TracerName = "main-tracer"
-	MeterName  = "main-meter"
+	defaultExportInterval = 60 * time.Second
+	defaultExportTimeout  = 30 * time.Second
+	defaultMaxQueueSize   = 10000
+	defaultBatchTimeout   = 5 * time.Second
 )
 
-// Telemetry holds all the telemetry providers
 type Telemetry struct {
 	TracerProvider *sdktrace.TracerProvider
 	MeterProvider  *sdkmetric.MeterProvider
@@ -46,11 +45,10 @@ type Telemetry struct {
 	Tracer         trace.Tracer
 	Meter          metric.Meter
 	UserCounter    metric.Int64Counter
+	LogVerbosity   int
 }
 
-// Setup initializes all telemetry components
 func Setup(ctx context.Context, cfg config.OtelConfig) (*Telemetry, func(context.Context) error, error) {
-	// Helper to collect shutdown functions
 	var shutdowns []func(context.Context) error
 	shutdown := func(ctx context.Context) error {
 		var err error
@@ -59,66 +57,60 @@ func Setup(ctx context.Context, cfg config.OtelConfig) (*Telemetry, func(context
 		}
 		return err
 	}
-
-	// Helper for error returns
 	handleErr := func(e error) (*Telemetry, func(context.Context) error, error) {
 		return nil, shutdown, e
 	}
 
 	// Build resource
-	resAttrs := []attribute.KeyValue{
-		semconv.ServiceNameKey.String(cfg.ServiceName),
-		semconv.ServiceVersionKey.String(cfg.ServiceVersion),
-	}
-	if cfg.ServiceNamespace != "" {
-		resAttrs = append(resAttrs, semconv.ServiceNamespaceKey.String(cfg.ServiceNamespace))
-	}
 	res, err := resource.New(ctx,
-		resource.WithAttributes(resAttrs...),
+		resource.WithAttributes(
+			semconv.ServiceNameKey.String(cfg.ServiceName),
+			semconv.ServiceVersionKey.String(cfg.ServiceVersion),
+			semconv.ServiceNamespaceKey.String(cfg.ServiceNamespace),
+		),
 		resource.WithSchemaURL(semconv.SchemaURL),
 	)
 	if err != nil {
 		return handleErr(fmt.Errorf("failed to create resource: %w", err))
 	}
 
-	// Determine OTLP protocol (gRPC or HTTP)
-	protocol := os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")
+	protocol := cfg.Protocol
 	if protocol == "" {
-		protocol = "http" // Default to http
+		protocol = "http"
 	}
-	slog.Info("Using OTLP protocol", "protocol", protocol)
+	slog.Info("Using OTLP protocol", "protocol", protocol, "endpoint", cfg.Endpoint)
 
-	// Create exporters based on protocol
-	var spanExporter sdktrace.SpanExporter
-	var metricReader sdkmetric.Reader
-	var logProcessor sdklog.Processor
+	var (
+		spanExporter sdktrace.SpanExporter
+		metricReader sdkmetric.Reader
+		logProcessor sdklog.Processor
+	)
 
-	if protocol == "grpc" {
-		// gRPC exporter setup
+	// --- Exporter setup ---
+	switch protocol {
+	case "grpc":
 		conn, err := grpc.NewClient(cfg.Endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
-			return handleErr(fmt.Errorf("failed to create gRPC connection to %s: %w", cfg.Endpoint, err))
+			slog.Error("Failed to connect to OTLP gRPC", "endpoint", cfg.Endpoint, "err", err)
+			return handleErr(err)
 		}
-
 		spanExporter, err = otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
 		if err != nil {
-			return handleErr(fmt.Errorf("failed to create gRPC trace exporter: %w", err))
+			return handleErr(fmt.Errorf("trace exporter gRPC: %w", err))
 		}
-
-		metricExporter, err := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithGRPCConn(conn))
+		metricExp, err := otlpmetricgrpc.New(ctx, otlpmetricgrpc.WithGRPCConn(conn))
 		if err != nil {
-			return handleErr(fmt.Errorf("failed to create gRPC metric exporter: %w", err))
+			return handleErr(fmt.Errorf("metric exporter gRPC: %w", err))
 		}
-		metricReader = sdkmetric.NewPeriodicReader(metricExporter)
+		metricReader = sdkmetric.NewPeriodicReader(metricExp)
 
-		logExporter, err := otlploggrpc.New(ctx, otlploggrpc.WithGRPCConn(conn))
+		logExp, err := otlploggrpc.New(ctx, otlploggrpc.WithGRPCConn(conn))
 		if err != nil {
-			return handleErr(fmt.Errorf("failed to create gRPC log exporter: %w", err))
+			return handleErr(fmt.Errorf("log exporter gRPC: %w", err))
 		}
-		logProcessor = sdklog.NewBatchProcessor(logExporter)
+		logProcessor = newBatchProcessor(logExp)
 
-	} else {
-		// HTTP exporter setup
+	default: // HTTP
 		traceOpts := []otlptracehttp.Option{otlptracehttp.WithEndpoint(cfg.Endpoint)}
 		metricOpts := []otlpmetrichttp.Option{otlpmetrichttp.WithEndpoint(cfg.Endpoint)}
 		logOpts := []otlploghttp.Option{otlploghttp.WithEndpoint(cfg.Endpoint)}
@@ -126,76 +118,84 @@ func Setup(ctx context.Context, cfg config.OtelConfig) (*Telemetry, func(context
 			traceOpts = append(traceOpts, otlptracehttp.WithInsecure())
 			metricOpts = append(metricOpts, otlpmetrichttp.WithInsecure())
 			logOpts = append(logOpts, otlploghttp.WithInsecure())
-			slog.Warn("Using insecure HTTP connection to OTLP collector")
+			slog.Warn("Using insecure HTTP connection", "endpoint", cfg.Endpoint)
 		}
 
-		traceExporter, err := otlptracehttp.New(ctx, traceOpts...)
+		spanExporter, err = otlptracehttp.New(ctx, traceOpts...)
 		if err != nil {
-			return handleErr(fmt.Errorf("failed to create HTTP trace exporter: %w", err))
+			slog.Warn("OTLP trace exporter unreachable", "endpoint", cfg.Endpoint, "err", err)
+			return handleErr(err)
 		}
-		spanExporter = traceExporter
 
-		metricExporter, err := otlpmetrichttp.New(ctx, metricOpts...)
+		metricExp, err := otlpmetrichttp.New(ctx, metricOpts...)
 		if err != nil {
-			return handleErr(fmt.Errorf("failed to create HTTP metric exporter: %w", err))
+			slog.Warn("OTLP metric exporter unreachable", "endpoint", cfg.Endpoint, "err", err)
+			return handleErr(err)
 		}
-		metricReader = sdkmetric.NewPeriodicReader(metricExporter)
+		metricReader = sdkmetric.NewPeriodicReader(metricExp)
 
-		logExporter, err := otlploghttp.New(ctx, logOpts...)
+		logExp, err := otlploghttp.New(ctx, logOpts...)
 		if err != nil {
-			return handleErr(fmt.Errorf("failed to create HTTP log exporter: %w", err))
+			slog.Warn("OTLP log exporter unreachable", "endpoint", cfg.Endpoint, "err", err)
+			return handleErr(err)
 		}
-		logProcessor = sdklog.NewBatchProcessor(logExporter)
+		logProcessor = newBatchProcessor(logExp)
 	}
 
-	// Create and register providers
+	// --- Providers ---
 	tracerProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(spanExporter),
+		sdktrace.WithBatcher(spanExporter,
+			sdktrace.WithMaxQueueSize(defaultMaxQueueSize),
+			sdktrace.WithBatchTimeout(defaultBatchTimeout),
+			sdktrace.WithExportTimeout(defaultExportTimeout)),
 		sdktrace.WithResource(res),
 	)
-	shutdowns = append(shutdowns, tracerProvider.Shutdown)
-
 	meterProvider := sdkmetric.NewMeterProvider(
 		sdkmetric.WithReader(metricReader),
 		sdkmetric.WithResource(res),
 	)
-	shutdowns = append(shutdowns, meterProvider.Shutdown)
-
 	loggerProvider := sdklog.NewLoggerProvider(
 		sdklog.WithProcessor(logProcessor),
 		sdklog.WithResource(res),
 	)
-	shutdowns = append(shutdowns, loggerProvider.Shutdown)
 
-	// Set global providers
+	// Register shutdowns
+	shutdowns = append(shutdowns, tracerProvider.Shutdown, meterProvider.Shutdown, loggerProvider.Shutdown)
+
+	// Set globals
 	otel.SetTracerProvider(tracerProvider)
 	otel.SetMeterProvider(meterProvider)
 	global.SetLoggerProvider(loggerProvider)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
 	slog.SetDefault(otelslog.NewLogger(cfg.ServiceName, otelslog.WithLoggerProvider(loggerProvider)))
 
-	// Start runtime metrics collection
 	if err := runtime.Start(runtime.WithMeterProvider(meterProvider)); err != nil {
-		return handleErr(fmt.Errorf("failed to start runtime metrics: %w", err))
+		slog.Error("Failed to start runtime metrics", "err", err)
+		return handleErr(err)
 	}
 
-	// Create custom metrics
-	meter := meterProvider.Meter(MeterName)
-	userCounter, err := meter.Int64Counter(
-		"user_operations_total",
-		metric.WithDescription("Counts user operations by type and status"),
-	)
+	meter := meterProvider.Meter(cfg.MeterName)
+	userCounter, err := meter.Int64Counter("user_operations_total", metric.WithDescription("Counts user operations"))
 	if err != nil {
-		return handleErr(fmt.Errorf("failed to create user counter: %w", err))
+		return handleErr(fmt.Errorf("user counter: %w", err))
 	}
 
-	t := &Telemetry{
+	return &Telemetry{
 		TracerProvider: tracerProvider,
 		MeterProvider:  meterProvider,
 		LoggerProvider: loggerProvider,
-		Tracer:         tracerProvider.Tracer(TracerName),
+		Tracer:         tracerProvider.Tracer(cfg.TracerName),
 		Meter:          meter,
 		UserCounter:    userCounter,
-	}
-	return t, shutdown, nil
+		LogVerbosity:   cfg.LogVerbosity,
+	}, shutdown, nil
+}
+
+func newBatchProcessor(exp sdklog.Exporter) sdklog.Processor {
+	return sdklog.NewBatchProcessor(exp,
+		sdklog.WithMaxQueueSize(defaultMaxQueueSize),
+		sdklog.WithExportInterval(defaultExportInterval),
+		sdklog.WithExportTimeout(defaultExportTimeout),
+	)
 }
