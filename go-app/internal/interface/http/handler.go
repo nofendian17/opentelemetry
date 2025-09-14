@@ -44,8 +44,7 @@ func (h *Handler) SetupRoutes() http.Handler {
 	// Create middleware chain
 	middlewareChain := middleware.ChainMiddleware(
 		middleware.LoggingMiddleware,
-		middleware.TracingMiddleware(h.config.ServiceName),
-		middleware.MetricsMiddlewareFactory(h.telemetry),
+		middleware.OtelHttpMiddleware("http.server"), // Replaces both tracing and the old metrics middleware
 		middleware.RecoveryMiddleware,
 		middleware.CORSMiddleware,
 	)

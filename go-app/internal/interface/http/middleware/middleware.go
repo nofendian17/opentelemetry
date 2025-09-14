@@ -7,18 +7,16 @@ import (
 	"net/http"
 	"time"
 
-	"go-app/internal/infrastructure/telemetry"
-
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 )
 
 // Middleware represents a middleware function
 type Middleware func(http.Handler) http.Handler
 
-// responseRecorder captures response status and body
+// responseRecorder captures response status and body.
+// This is re-added to fix a compilation error in LoggingMiddleware.
 type responseRecorder struct {
 	http.ResponseWriter
 	status int
@@ -68,42 +66,16 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// TracingMiddleware adds tracing to requests
-func TracingMiddleware(serviceName string) Middleware {
+// OtelHttpMiddleware adds OpenTelemetry tracing and metrics to requests.
+// It uses the standard otelhttp handler, which automatically records
+// HTTP server metrics (e.g., duration, request/response size) and creates spans for traces.
+func OtelHttpMiddleware(operation string) Middleware {
 	return func(next http.Handler) http.Handler {
-		// Use otelhttp with additional options for better tracing
 		return otelhttp.NewHandler(
 			next,
-			serviceName,
+			operation, // This becomes the span name for the server request
 			otelhttp.WithMessageEvents(otelhttp.ReadEvents, otelhttp.WriteEvents),
 		)
-	}
-}
-
-// MetricsMiddlewareFactory creates a middleware that records request duration metrics
-func MetricsMiddlewareFactory(tel *telemetry.Telemetry) Middleware {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			start := time.Now()
-
-			rec := &responseRecorder{ResponseWriter: w, status: http.StatusOK}
-			next.ServeHTTP(rec, r)
-
-			// Calculate request duration
-			duration := time.Since(start)
-
-			// Add attributes for the metric
-			attrs := []attribute.KeyValue{
-				attribute.String("method", r.Method),
-				attribute.String("path", r.URL.Path),
-				attribute.Int("status", rec.status),
-			}
-
-			// Record the metric using telemetry package
-			if tel != nil && tel.RequestDuration != nil {
-				tel.RequestDuration.Record(r.Context(), duration.Seconds(), metric.WithAttributes(attrs...))
-			}
-		})
 	}
 }
 
