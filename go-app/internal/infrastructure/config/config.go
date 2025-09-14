@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"strconv"
+
+	"github.com/spf13/viper"
 )
 
 // OtelConfig holds the configuration for OTel SDK
@@ -12,6 +14,7 @@ type OtelConfig struct {
 	ServiceNamespace string
 	Endpoint         string
 	Insecure         bool
+	AppPort          string
 }
 
 // GetEnv returns the value of an environment variable or a fallback value
@@ -33,13 +36,22 @@ func GetEnvAsBool(key string, fallback bool) bool {
 	return fallback
 }
 
-// LoadConfig loads configuration from environment variables
 func LoadConfig() OtelConfig {
+	viper.AutomaticEnv()
+
+	viper.SetDefault("OTEL_SERVICE_NAME", "go-app")
+	viper.SetDefault("OTEL_SERVICE_VERSION", "v0.1.0")
+	viper.SetDefault("OTEL_SERVICE_NAMESPACE", "")
+	viper.SetDefault("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4318")
+	viper.SetDefault("OTEL_EXPORTER_OTLP_INSECURE", true)
+	viper.SetDefault("APP_PORT", "8080")
+
 	return OtelConfig{
-		ServiceName:      GetEnv("OTEL_SERVICE_NAME", "go-app"),
-		ServiceVersion:   GetEnv("OTEL_SERVICE_VERSION", "v0.1.0"),
-		ServiceNamespace: GetEnv("OTEL_SERVICE_NAMESPACE", ""),
-		Endpoint:         GetEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4317"),
-		Insecure:         GetEnvAsBool("OTEL_EXPORTER_OTLP_INSECURE", true),
+		ServiceName:      viper.GetString("OTEL_SERVICE_NAME"),
+		ServiceVersion:   viper.GetString("OTEL_SERVICE_VERSION"),
+		ServiceNamespace: viper.GetString("OTEL_SERVICE_NAMESPACE"),
+		Endpoint:         viper.GetString("OTEL_EXPORTER_OTLP_ENDPOINT"),
+		Insecure:         viper.GetBool("OTEL_EXPORTER_OTLP_INSECURE"),
+		AppPort:          viper.GetString("APP_PORT"),
 	}
 }

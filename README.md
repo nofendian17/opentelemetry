@@ -14,6 +14,7 @@ This project provides a ready-to-use observability stack that includes:
 - **Promtail** - Log shipper for Loki
 - **Node Exporter** - System metrics collector for host monitoring
 - **Grafana** - Visualization platform for logs, metrics, and traces
+- **Sample Go Application** - Instrumented application demonstrating OpenTelemetry usage
 
 The stack is pre-configured with a sample Go application dashboard and all necessary data source connections.
 
@@ -55,6 +56,86 @@ graph TD
 2. Access Grafana at http://localhost:3000 (admin:admin)
 
 3. Send telemetry data to the OTLP receiver at http://localhost:4318
+
+4. Run the sample Go application:
+   ```bash
+   cd go-app
+   go run main.go
+   ```
+
+5. Test the application endpoints:
+   ```bash
+   cd go-app
+   ./test_endpoints.sh
+   ```
+
+## Sample Go Application
+
+The repository includes a sample Go application (`go-app`) that demonstrates how to instrument an application with OpenTelemetry. The application features:
+
+### Features
+- RESTful API for user management (CRUD operations)
+- Complete OpenTelemetry instrumentation for traces, metrics, and logs
+- Graceful shutdown handling
+- Configuration management with environment variables
+- In-memory storage for demonstration purposes
+
+### API Endpoints
+The application exposes the following endpoints:
+
+| Method | Endpoint    | Description              |
+|--------|-------------|--------------------------|
+| GET    | /           | Root endpoint            |
+| GET    | /health     | Health check             |
+| GET    | /users      | List all users           |
+| POST   | /users      | Create a new user        |
+| GET    | /users/{id} | Get user by ID           |
+| PUT    | /users/{id} | Update user by ID        |
+| DELETE | /users/{id} | Delete user by ID        |
+
+### Running the Application
+1. Navigate to the `go-app` directory:
+   ```bash
+   cd go-app
+   ```
+
+2. Copy the example environment file and modify as needed:
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Run the application:
+   ```bash
+   go run main.go
+   ```
+
+The application will start on port 8080 by default.
+
+### Testing the Application
+Use the provided test script to verify the application is working:
+```bash
+./test_endpoints.sh
+```
+
+Or manually test with curl:
+```bash
+# Create a user
+curl -X POST http://localhost:8080/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Alice","email":"alice@example.com"}'
+
+# List users
+curl http://localhost:8080/users
+```
+
+### OpenTelemetry Instrumentation
+The application is fully instrumented with OpenTelemetry:
+
+- **Tracing**: Automatic and manual span creation for all HTTP requests and business operations
+- **Metrics**: Custom metrics for application performance monitoring
+- **Logging**: Structured logging with trace context propagation
+
+The application sends telemetry data to the OpenTelemetry Collector at `localhost:4318`.
 
 ## Configuration
 
