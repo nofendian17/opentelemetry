@@ -85,8 +85,13 @@ func main() {
 	kafkaWorker := worker.NewKafkaWorker(kconsumer, tel)
 	kafkaWorker.Start(ctx)
 
-	// Create repositories
-	userRepo := postgresrepo.NewPostgresUserRepository(pgDB.DB)
+	// Auto-migration will handle table creation and updates
+	if err := pgDB.AutoMigrate(&postgresrepo.UserModel{}); err != nil {
+		log.Fatalf("Failed to run auto migration: %v", err)
+	}
+
+	// Create repositories using GORM DB
+	userRepo := postgresrepo.NewPostgresUserRepository(pgDB.GetGormDB())
 
 	// Create services
 	userService := service.NewUserService(userRepo, tel)

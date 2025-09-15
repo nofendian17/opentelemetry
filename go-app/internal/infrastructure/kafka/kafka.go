@@ -32,6 +32,7 @@ type Consumer struct {
 func NewProducer(cfg config.KafkaConfig, tel *telemetry.Telemetry) (*Producer, error) {
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(cfg.Brokers...),
+		kgo.AllowAutoTopicCreation(),
 		kgo.WithHooks(kotel.NewKotel().Hooks()...),
 		kgo.ProducerBatchMaxBytes(1048576), // 1MB
 		kgo.ProducerBatchCompression(kgo.GzipCompression()),

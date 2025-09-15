@@ -3,10 +3,8 @@ module go-app
 go 1.24.7
 
 require (
-	github.com/XSAM/otelsql v0.40.0
 	github.com/go-redis/redis/extra/redisotel/v8 v8.11.5
 	github.com/go-redis/redis/v8 v8.11.5
-	github.com/jackc/pgx/v5 v5.7.6
 	github.com/spf13/viper v1.21.0
 	github.com/twmb/franz-go v1.19.5
 	github.com/twmb/franz-go/plugin/kotel v1.6.0
@@ -26,6 +24,8 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
 	google.golang.org/grpc v1.75.1
+	gorm.io/driver/postgres v1.6.0
+	gorm.io/gorm v1.31.0
 )
 
 require (
@@ -39,7 +39,10 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.2 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/pgx/v5 v5.7.6 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect

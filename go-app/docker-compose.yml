@@ -1,7 +1,9 @@
 services:
   # Go Application
   go-app:
-    image: go-app:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: go-app
     ports:
       - "8080:8080"
@@ -12,8 +14,8 @@ services:
       - KAFKA_BROKERS=kafka:29092
       - OTEL_SERVICE_NAME=go-app
       - OTEL_SERVICE_VERSION=v1.0.0
-      - OTEL_EXPORTER_OTLP_PROTOCOL=http
-      - OTEL_EXPORTER_OTLP_ENDPOINT=localhost:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=${OTEL_EXPORTER_OTLP_PROTOCOL:-http}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}
       - OTEL_EXPORTER_OTLP_INSECURE=true
     depends_on:
       postgres:
@@ -39,7 +41,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - go-app-network
     healthcheck:

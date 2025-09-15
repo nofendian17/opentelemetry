@@ -52,7 +52,8 @@ func (e *DomainError) Unwrap() error {
 
 // Is implements error comparison for errors.Is
 func (e *DomainError) Is(target error) bool {
-	if t, ok := target.(*DomainError); ok {
+	var t *DomainError
+	if errors.As(target, &t) {
 		return e.Code == t.Code
 	}
 	return false

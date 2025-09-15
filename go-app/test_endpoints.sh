@@ -11,10 +11,14 @@ curl -i "$BASE_URL/health"
 echo -e "\n\n== List users =="
 curl -i "$BASE_URL/users"
 
-echo -e "\n\n== Create user =="
-curl -i -X POST "$BASE_URL/users" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Alice","email":"alice@example.com"}'
+echo -e "\n\n== Create 1000 random users =="
+for i in {1..100000}; do
+  name="User_$RANDOM"
+  email="user_$RANDOM@example.com"
+  curl -i -X POST "$BASE_URL/users" \
+    -H "Content-Type: application/json" \
+    -d "{\"name\":\"$name\",\"email\":\"$email\"}"
+done
 
 echo -e "\n\n== Get user by ID =="
 curl -i "$BASE_URL/users/1"
