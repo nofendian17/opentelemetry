@@ -7,17 +7,17 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"go-app/internal/domain/service"
+	"go-app/internal/application/service"
 	"go-app/internal/infrastructure/telemetry"
 )
 
 // RootHandler handles requests to the root endpoint
 type RootHandler struct {
-	appService service.AppService
+	appService *service.AppService
 }
 
 // NewRootHandler creates a new root handler
-func NewRootHandler(appService service.AppService) *RootHandler {
+func NewRootHandler(appService *service.AppService) *RootHandler {
 	return &RootHandler{
 		appService: appService,
 	}

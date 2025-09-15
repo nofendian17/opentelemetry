@@ -5,25 +5,24 @@ import (
 	"fmt"
 	"net/http"
 
-	"go-app/internal/domain/service"
+	"go-app/internal/application/service"
 	"go-app/internal/infrastructure/config"
 	"go-app/internal/infrastructure/telemetry"
 	"go-app/internal/interface/http/middleware"
 	"go-app/internal/interface/http/routes"
-	"go-app/internal/usecase"
 )
 
 // Handler holds the HTTP handler dependencies
 type Handler struct {
-	userService *usecase.UserUseCase
-	appService  service.AppService
+	userService *service.UserService
+	appService  *service.AppService
 	server      *http.Server
 	telemetry   *telemetry.Telemetry
 	config      config.OtelConfig
 }
 
 // NewHandler creates a new HTTP handler
-func NewHandler(userService *usecase.UserUseCase, appService service.AppService, tel *telemetry.Telemetry, cfg config.OtelConfig) *Handler {
+func NewHandler(userService *service.UserService, appService *service.AppService, tel *telemetry.Telemetry, cfg config.OtelConfig) *Handler {
 	return &Handler{
 		userService: userService,
 		appService:  appService,

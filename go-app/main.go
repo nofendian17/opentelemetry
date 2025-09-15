@@ -11,11 +11,15 @@ import (
 	"syscall"
 	"time"
 
+	"go-app/internal/application/service"
+	"go-app/internal/application/worker"
 	"go-app/internal/infrastructure/config"
-	"go-app/internal/infrastructure/memory"
+	"go-app/internal/infrastructure/kafka"
+	"go-app/internal/infrastructure/postgres"
+	"go-app/internal/infrastructure/redis"
+	postgresrepo "go-app/internal/infrastructure/repository/postgres"
 	"go-app/internal/infrastructure/telemetry"
 	h "go-app/internal/interface/http"
-	"go-app/internal/usecase"
 )
 
 func main() {
@@ -41,27 +45,67 @@ func main() {
 		}
 	}()
 
-	// Create repositories
-	userRepo := memory.NewInMemoryRepository()
+	// Create postgres client
+	pgDB, err := postgres.NewClient(ctx, cfg.Postgres, tel)
+	if err != nil {
+		log.Fatalf("Failed to initialize postgres: %v", err)
+	}
+	defer func() {
+		if err := pgDB.Close(); err != nil {
+			telemetry.Log(context.Background(), telemetry.LevelError, "Error during postgres shutdown", err)
+		}
+	}()
 
-	// Create use cases
-	userUseCase := usecase.NewUserUseCase(userRepo, tel)
-	appUseCase := usecase.NewAppUseCase(tel)
+	// Create redis client
+	rdb, err := redis.NewClient(ctx, cfg.Redis, tel)
+	if err != nil {
+		log.Fatalf("Failed to initialize redis: %v", err)
+	}
+	defer func() {
+		if err := rdb.Close(); err != nil {
+			telemetry.Log(context.Background(), telemetry.LevelError, "Error during redis shutdown", err)
+		}
+	}()
+
+	// Create kafka producer
+	kproducer, err := kafka.NewProducer(cfg.Kafka, tel)
+	if err != nil {
+		log.Fatalf("Failed to initialize kafka producer: %v", err)
+	}
+	defer kproducer.Close()
+
+	// Create kafka consumer
+	kconsumer, err := kafka.NewConsumer(cfg.Kafka, cfg.Kafka.ConsumerGroup, tel)
+	if err != nil {
+		log.Fatalf("Failed to initialize kafka consumer: %v", err)
+	}
+	defer kconsumer.Close()
+
+	// Create and start Kafka worker
+	kafkaWorker := worker.NewKafkaWorker(kconsumer, tel)
+	kafkaWorker.Start(ctx)
+
+	// Create repositories
+	userRepo := postgresrepo.NewPostgresUserRepository(pgDB.DB)
+
+	// Create services
+	userService := service.NewUserService(userRepo, tel)
+	appService := service.NewAppService(tel)
 
 	// Create HTTP handler
-	handler := h.NewHandler(userUseCase, appUseCase, tel, cfg)
+	handler := h.NewHandler(userService, appService, tel, cfg.Otel)
 
 	// Start server in a goroutine
 	serverCtx, serverCancel := context.WithCancel(ctx)
 	defer serverCancel()
 
 	go func() {
-		fmt.Printf("Server starting on %s\n", cfg.AppPort)
-		telemetry.Log(serverCtx, telemetry.LevelInfo, fmt.Sprintf("Starting server on %s", cfg.AppPort), nil)
-		if err := handler.StartWithAddr(serverCtx, cfg.AppPort); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		fmt.Printf("Server starting on %s\n", cfg.Otel.AppPort)
+		telemetry.Log(serverCtx, telemetry.LevelInfo, fmt.Sprintf("Starting server on %s", cfg.Otel.AppPort), nil)
+		if err := handler.StartWithAddr(serverCtx, cfg.Otel.AppPort); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			if errors.Is(err, syscall.EADDRINUSE) {
-				fmt.Fprintf(os.Stderr, "Port %s is already in use. Please choose another port.\n", cfg.AppPort)
-				telemetry.Log(serverCtx, telemetry.LevelError, fmt.Sprintf("Port %s is already in use", cfg.AppPort), err)
+				fmt.Fprintf(os.Stderr, "Port %s is already in use. Please choose another port.\n", cfg.Otel.AppPort)
+				telemetry.Log(serverCtx, telemetry.LevelError, fmt.Sprintf("Port %s is already in use", cfg.Otel.AppPort), err)
 				os.Exit(1)
 			} else {
 				telemetry.Log(serverCtx, telemetry.LevelError, "Server failed to start", err)
