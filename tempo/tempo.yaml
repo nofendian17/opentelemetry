@@ -2,69 +2,21 @@ server:
   http_listen_port: 3200
   log_level: info
 
-# Add memory and resource constraints
-query_frontend:
-  # Limit concurrent queries
-  max_outstanding_per_tenant: 10
-  # Reduce query timeout
-  query_timeout: 10s
-
-# Add memory ballast to reduce GC pressure
-mem_ballast_size_mb: 128  # Adjust based on your available memory
-
 distributor:
   receivers:
     otlp:
       protocols:
         grpc:
           endpoint: 0.0.0.0:4317
-          # Add memory limits for gRPC receiver
-          max_recv_msg_size: 4194304  # 4MB
-          max_concurrent_streams: 10
         http:
           endpoint: 0.0.0.0:4318
-          # Add memory limits for HTTP receiver
-          max_request_body_size: 4194304  # 4MB
-  # Limit individual attribute size to prevent memory issues
   max_attribute_bytes: 2048
-  # Limit span size to prevent memory issues
-  max_span_bytes: 1048576  # 1MB
-  # Limit number of spans per trace
-  max_spans_per_trace: 1000
 
-# Optimize ingester memory usage
 ingester:
-  trace_idle_period: 1s              # Flush idle traces faster (reduced from 2s)
-  max_block_bytes: 26214400          # 25MB max block size (reduced from 50MB)
-  max_block_duration: 5m             # 5 minutes
-  # Add memory flushing settings
-  flush_check_period: 1s             # Check for flushable blocks more frequently
-  max_memory_traces: 5000            # Limit traces kept in memory (reduced from 10000)
-  # Add additional memory limits
-  complete_block_timeout: 10m        # Timeout for completing blocks
-
-# Add limits to prevent memory issues
-overrides:
-  metrics_generator_processors: [ service-graphs, span-metrics, local-blocks ]
-  # Add ingestion limits
-  ingestion_burst_size_bytes: 2000000   # 2MB burst size (reduced from 5MB)
-  ingestion_rate_limit_bytes: 1000000   # 1MB/s rate limit (reduced from 2MB)
-  # Add trace limits
-  max_traces_per_user: 1000             # Limit concurrent traces per user
-  max_bytes_per_trace: 500000           # 500KB limit per trace
-  # Add search limits
-  max_search_bytes_per_trace: 4096      # Limit search data per trace
-
-compactor:
-  compaction:
-    # Set retention to prevent unlimited growth
-    block_retention: 6h  # 6 hours (reduced from 1 day)
-    compaction_interval: 30s
-    max_compaction_objects: 1000000
-    # Add compaction memory limits
-    max_compaction_workers: 2  # Limit concurrent compaction workers
-  # Add memory limits for compactor
-  max_block_bytes: 52428800  # 50MB
+  trace_idle_period: 1s
+  max_block_bytes: 26214400
+  max_block_duration: 5m
+  complete_block_timeout: 10m
 
 storage:
   trace:
@@ -73,35 +25,15 @@ storage:
       path: /var/tempo
     wal:
       path: /var/tempo/wal
-      # Optimize WAL settings to reduce memory pressure
-      wal_compression: true
-      wal_segment_size: 134217728  # 128MB
-      wal_flush_period: 1s         # Flush WAL more frequently
-      # Add memory-specific WAL settings
-      wal_max_segment_age: 1m      # Clean up old segments faster
-      wal_buffer_size: 31457280    # 30MB buffer (reduced from default)
-    search:
-      # Limit search results to reduce memory usage
-      max_spans_per_spanmetric: 1000
-      max_traces_per_query: 100
-      max_bytes_per_trace: 500000  # 500KB
 
-metrics_generator:
-  registry:
-    external_labels:
-      source: tempo
-  storage:
-    path: /var/tempo/generator
-  # Add limits for metrics generator
-  max_active_series: 10000
-  collection_interval: 15s
-  flush_interval: 30s
+compactor:
+  compaction:
+    block_retention: 6h
+    max_compaction_objects: 1000000
 
-# Add global limits to prevent memory issues
-limits:
-  # Per-user limits
+overrides:
+  metrics_generator_processors: [ service-graphs, span-metrics, local-blocks ]
+  ingestion_burst_size_bytes: 2000000
+  ingestion_rate_limit_bytes: 1000000
   max_traces_per_user: 1000
-  max_ingestion_rate: 1000
-  max_bytes_per_trace: 500000  # 500KB
-  max_search_rate: 10
-  max_search_bytes_per_trace: 4096
+  max_bytes_per_trace: 500000
