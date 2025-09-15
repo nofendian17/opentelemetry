@@ -12,6 +12,11 @@ distributor:
           endpoint: 0.0.0.0:4318
   max_attribute_bytes: 2048
 
+memberlist:
+  abort_if_cluster_join_fails: false
+  join_members: [ "127.0.0.1" ]
+
+
 ingester:
   trace_idle_period: 1s
   max_block_bytes: 26214400
