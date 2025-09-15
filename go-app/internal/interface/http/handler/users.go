@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -9,19 +10,19 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	models "go-app/internal/domain/model"
-	"go-app/internal/domain/repository"
+	"go-app/internal/application/dto"
+	"go-app/internal/application/service"
+	domainErrors "go-app/internal/domain/errors"
 	"go-app/internal/infrastructure/telemetry"
-	"go-app/internal/usecase"
 )
 
 // UsersHandler handles requests to the users endpoint
 type UsersHandler struct {
-	userService *usecase.UserUseCase
+	userService *service.UserService
 }
 
 // NewUsersHandler creates a new users handler
-func NewUsersHandler(userService *usecase.UserUseCase) *UsersHandler {
+func NewUsersHandler(userService *service.UserService) *UsersHandler {
 	return &UsersHandler{
 		userService: userService,
 	}
@@ -45,13 +46,12 @@ func (h *UsersHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		h.deleteUser(w, r)
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		h.writeErrorResponse(w, "Method not allowed", http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED")
 	}
 }
 
 // listUsers handles GET requests to list all users
 func (h *UsersHandler) listUsers(w http.ResponseWriter, r *http.Request) {
-	// Create a context with the current request
 	ctx := r.Context()
 
 	// Add attributes to the current span
@@ -62,56 +62,45 @@ func (h *UsersHandler) listUsers(w http.ResponseWriter, r *http.Request) {
 		attribute.String("operation", "list"),
 	)
 
+	// Parse query parameters for pagination
+	limit := 10 // default
+	offset := 0 // default
+
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	// Create request DTO
+	req := dto.ListUsersRequest{
+		Limit:  limit,
+		Offset: offset,
+	}
+
 	// Get users from user service
-	users, err := h.userService.List(ctx)
+	response, err := h.userService.ListUsers(ctx, req)
 	if err != nil {
 		telemetry.Log(ctx, telemetry.LevelError, "Failed to get users", err,
 			attribute.String("handler", "users"),
 			attribute.String("path", "/users"),
 		)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.writeErrorResponseFromDomainError(w, err)
 		return
 	}
 
-	// Convert to map for JSON response
-	usersMap := make([]map[string]interface{}, len(users))
-	for i, user := range users {
-		usersMap[i] = map[string]interface{}{
-			"id":    user.ID,
-			"name":  user.Name,
-			"email": user.Email,
-		}
-	}
-
-	// Respond with JSON
-	response := map[string]interface{}{
-		"users":  usersMap,
-		"count":  len(users),
-		"path":   "/users",
-		"method": r.Method,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		telemetry.Log(ctx, telemetry.LevelError, "Failed to encode response", err,
-			attribute.String("handler", "users"),
-			attribute.String("path", "/users"),
-		)
-	}
+	h.writeJSONResponse(w, response, http.StatusOK)
 }
 
 // getUserByID handles GET requests to get a specific user by ID
 func (h *UsersHandler) getUserByID(w http.ResponseWriter, r *http.Request, idStr string) {
-	// Create a context with the current request
 	ctx := r.Context()
-
-	// Parse user ID
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
-		return
-	}
 
 	// Add attributes to the current span
 	span := trace.SpanFromContext(ctx)
@@ -119,56 +108,32 @@ func (h *UsersHandler) getUserByID(w http.ResponseWriter, r *http.Request, idStr
 		attribute.String("http.route", "/users/{id}"),
 		attribute.String("handler", "users"),
 		attribute.String("operation", "get"),
-		attribute.Int("user.id", id),
+		attribute.String("user.id", idStr),
 	)
 
 	// Get user from user service
-	user, err := h.userService.GetByID(ctx, id)
+	user, err := h.userService.GetUserByID(ctx, idStr)
 	if err != nil {
-		if errors.Is(err, repository.ErrUserNotFound) {
-			http.Error(w, "User not found", http.StatusNotFound)
-			return
-		}
 		telemetry.Log(ctx, telemetry.LevelError, "Failed to get user", err,
 			attribute.String("handler", "users"),
 			attribute.String("path", "/users/"+idStr),
-			attribute.Int("user.id", id),
+			attribute.String("user.id", idStr),
 		)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.writeErrorResponseFromDomainError(w, err)
 		return
 	}
 
-	// Respond with JSON
-	response := map[string]interface{}{
-		"user": map[string]interface{}{
-			"id":    user.ID,
-			"name":  user.Name,
-			"email": user.Email,
-		},
-		"path":   "/users/" + idStr,
-		"method": r.Method,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		telemetry.Log(ctx, telemetry.LevelError, "Failed to encode response", err,
-			attribute.String("handler", "users"),
-			attribute.String("path", "/users/"+idStr),
-			attribute.Int("user.id", id),
-		)
-	}
+	h.writeJSONResponse(w, user, http.StatusOK)
 }
 
 // createUser handles POST requests to create a new user
 func (h *UsersHandler) createUser(w http.ResponseWriter, r *http.Request) {
-	// Create a context with the current request
 	ctx := r.Context()
 
 	// Parse request body
-	var user models.User
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+	var req dto.CreateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeErrorResponse(w, "Invalid JSON", http.StatusBadRequest, "INVALID_JSON")
 		return
 	}
 
@@ -178,73 +143,49 @@ func (h *UsersHandler) createUser(w http.ResponseWriter, r *http.Request) {
 		attribute.String("http.route", "/users"),
 		attribute.String("handler", "users"),
 		attribute.String("operation", "create"),
-		attribute.String("user.email", user.Email),
-		attribute.String("user.name", user.Name),
+		attribute.String("user.email", req.Email),
+		attribute.String("user.name", req.Name),
 	)
 
 	// Create user through user service
-	err := h.userService.Create(ctx, &user)
+	user, err := h.userService.CreateUser(ctx, req)
 	if err != nil {
-		if errors.Is(err, repository.ErrUserAlreadyExists) {
-			http.Error(w, "User already exists", http.StatusConflict)
-			return
-		}
 		telemetry.Log(ctx, telemetry.LevelError, "Failed to create user", err,
 			attribute.String("handler", "users"),
 			attribute.String("path", "/users"),
-			attribute.String("user.email", user.Email),
-			attribute.String("user.name", user.Name),
+			attribute.String("user.email", req.Email),
+			attribute.String("user.name", req.Name),
 		)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.writeErrorResponseFromDomainError(w, err)
 		return
 	}
 
-	// Respond with JSON
-	response := map[string]interface{}{
-		"user": map[string]interface{}{
-			"id":    user.ID,
-			"name":  user.Name,
-			"email": user.Email,
-		},
-		"message": "User created successfully",
-		"path":    "/users",
-		"method":  r.Method,
+	// Create success response
+	response := dto.SuccessResponse{
+		Message: "User created successfully",
+		Data:    user,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		telemetry.Log(ctx, telemetry.LevelError, "Failed to encode response", err,
-			attribute.String("handler", "users"),
-			attribute.String("path", "/users"),
-			attribute.String("user.email", user.Email),
-			attribute.String("user.name", user.Name),
-		)
-	}
+	h.writeJSONResponse(w, response, http.StatusCreated)
 }
 
 // updateUser handles PUT requests to update an existing user
 func (h *UsersHandler) updateUser(w http.ResponseWriter, r *http.Request) {
-	// Create a context with the current request
 	ctx := r.Context()
 
 	// Parse user ID from path
 	idStr := r.PathValue("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+	if idStr == "" {
+		h.writeErrorResponse(w, "User ID is required", http.StatusBadRequest, "MISSING_USER_ID")
 		return
 	}
 
 	// Parse request body
-	var user models.User
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+	var req dto.UpdateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeErrorResponse(w, "Invalid JSON", http.StatusBadRequest, "INVALID_JSON")
 		return
 	}
-
-	// Set the user ID from the path
-	user.ID = id
 
 	// Add attributes to the current span
 	span := trace.SpanFromContext(ctx)
@@ -252,68 +193,42 @@ func (h *UsersHandler) updateUser(w http.ResponseWriter, r *http.Request) {
 		attribute.String("http.route", "/users/{id}"),
 		attribute.String("handler", "users"),
 		attribute.String("operation", "update"),
-		attribute.Int("user.id", id),
-		attribute.String("user.email", user.Email),
-		attribute.String("user.name", user.Name),
+		attribute.String("user.id", idStr),
+		attribute.String("user.email", req.Email),
+		attribute.String("user.name", req.Name),
 	)
 
 	// Update user through user service
-	err = h.userService.Update(ctx, &user)
+	user, err := h.userService.UpdateUser(ctx, idStr, req)
 	if err != nil {
-		if errors.Is(err, repository.ErrUserNotFound) {
-			http.Error(w, "User not found", http.StatusNotFound)
-			return
-		}
-		if errors.Is(err, repository.ErrUserAlreadyExists) {
-			http.Error(w, "User with this email already exists", http.StatusConflict)
-			return
-		}
 		telemetry.Log(ctx, telemetry.LevelError, "Failed to update user", err,
 			attribute.String("handler", "users"),
 			attribute.String("path", "/users/"+idStr),
-			attribute.Int("user.id", id),
-			attribute.String("user.email", user.Email),
-			attribute.String("user.name", user.Name),
+			attribute.String("user.id", idStr),
+			attribute.String("user.email", req.Email),
+			attribute.String("user.name", req.Name),
 		)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.writeErrorResponseFromDomainError(w, err)
 		return
 	}
 
-	// Respond with JSON
-	response := map[string]interface{}{
-		"user": map[string]interface{}{
-			"id":    user.ID,
-			"name":  user.Name,
-			"email": user.Email,
-		},
-		"message": "User updated successfully",
-		"path":    "/users/" + idStr,
-		"method":  r.Method,
+	// Create success response
+	response := dto.SuccessResponse{
+		Message: "User updated successfully",
+		Data:    user,
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		telemetry.Log(ctx, telemetry.LevelError, "Failed to encode response", err,
-			attribute.String("handler", "users"),
-			attribute.String("path", "/users/"+idStr),
-			attribute.Int("user.id", id),
-			attribute.String("user.email", user.Email),
-			attribute.String("user.name", user.Name),
-		)
-	}
+	h.writeJSONResponse(w, response, http.StatusOK)
 }
 
 // deleteUser handles DELETE requests to remove a user
 func (h *UsersHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
-	// Create a context with the current request
 	ctx := r.Context()
 
 	// Parse user ID from path
 	idStr := r.PathValue("id")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+	if idStr == "" {
+		h.writeErrorResponse(w, "User ID is required", http.StatusBadRequest, "MISSING_USER_ID")
 		return
 	}
 
@@ -323,39 +238,86 @@ func (h *UsersHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
 		attribute.String("http.route", "/users/{id}"),
 		attribute.String("handler", "users"),
 		attribute.String("operation", "delete"),
-		attribute.Int("user.id", id),
+		attribute.String("user.id", idStr),
 	)
 
 	// Delete user through user service
-	err = h.userService.Delete(ctx, id)
+	err := h.userService.DeleteUser(ctx, idStr)
 	if err != nil {
-		if errors.Is(err, repository.ErrUserNotFound) {
-			http.Error(w, "User not found", http.StatusNotFound)
-			return
-		}
 		telemetry.Log(ctx, telemetry.LevelError, "Failed to delete user", err,
 			attribute.String("handler", "users"),
 			attribute.String("path", "/users/"+idStr),
-			attribute.Int("user.id", id),
+			attribute.String("user.id", idStr),
 		)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		h.writeErrorResponseFromDomainError(w, err)
 		return
 	}
 
-	// Respond with JSON
-	response := map[string]interface{}{
-		"message": "User deleted successfully",
-		"path":    "/users/" + idStr,
-		"method":  r.Method,
+	// Create success response
+	response := dto.SuccessResponse{
+		Message: "User deleted successfully",
 	}
 
+	h.writeJSONResponse(w, response, http.StatusOK)
+}
+
+// writeJSONResponse writes a JSON response
+func (h *UsersHandler) writeJSONResponse(w http.ResponseWriter, data interface{}, statusCode int) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		telemetry.Log(ctx, telemetry.LevelError, "Failed to encode response", err,
-			attribute.String("handler", "users"),
-			attribute.String("path", "/users/"+idStr),
-			attribute.Int("user.id", id),
-		)
+	w.WriteHeader(statusCode)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		// Log error but don't change response since headers are already written
+		telemetry.Log(context.Background(), telemetry.LevelError, "Failed to encode JSON response", err)
 	}
+}
+
+// writeErrorResponse writes an error response
+func (h *UsersHandler) writeErrorResponse(w http.ResponseWriter, message string, statusCode int, code string) {
+	errorResp := dto.ErrorResponse{
+		Error:   message,
+		Code:    code,
+		Message: message,
+	}
+	h.writeJSONResponse(w, errorResp, statusCode)
+}
+
+// writeErrorResponseFromDomainError writes an error response from a domain error
+func (h *UsersHandler) writeErrorResponseFromDomainError(w http.ResponseWriter, err error) {
+	var domainErr *domainErrors.DomainError
+	var statusCode int
+	var errorResp dto.ErrorResponse
+
+	if errors.As(err, &domainErr) {
+		// Map domain error codes to HTTP status codes
+		switch domainErr.Code {
+		case domainErrors.ErrCodeUserNotFound:
+			statusCode = http.StatusNotFound
+		case domainErrors.ErrCodeUserAlreadyExists:
+			statusCode = http.StatusConflict
+		case domainErrors.ErrCodeValidationFailed, domainErrors.ErrCodeInvalidUserData,
+			domainErrors.ErrCodeInvalidEmail, domainErrors.ErrCodeInvalidName, domainErrors.ErrCodeInvalidID:
+			statusCode = http.StatusBadRequest
+		case domainErrors.ErrCodeRepositoryError, domainErrors.ErrCodeDatabaseError:
+			statusCode = http.StatusInternalServerError
+		default:
+			statusCode = http.StatusInternalServerError
+		}
+
+		errorResp = dto.ErrorResponse{
+			Error:   domainErr.Error(),
+			Code:    string(domainErr.Code),
+			Message: domainErr.Message,
+			Context: domainErr.Context,
+		}
+	} else {
+		// Generic error
+		statusCode = http.StatusInternalServerError
+		errorResp = dto.ErrorResponse{
+			Error:   err.Error(),
+			Code:    "INTERNAL_ERROR",
+			Message: "An internal error occurred",
+		}
+	}
+
+	h.writeJSONResponse(w, errorResp, statusCode)
 }

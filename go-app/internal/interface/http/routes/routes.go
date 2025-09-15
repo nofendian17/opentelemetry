@@ -3,19 +3,18 @@ package routes
 import (
 	"net/http"
 
-	"go-app/internal/domain/service"
+	"go-app/internal/application/service"
 	"go-app/internal/interface/http/handler"
-	"go-app/internal/usecase"
 )
 
 // Router holds the router dependencies
 type Router struct {
-	userService *usecase.UserUseCase
-	appService  service.AppService
+	userService *service.UserService
+	appService  *service.AppService
 }
 
 // NewRouter creates a new router
-func NewRouter(userService *usecase.UserUseCase, appService service.AppService) *Router {
+func NewRouter(userService *service.UserService, appService *service.AppService) *Router {
 	return &Router{
 		userService: userService,
 		appService:  appService,
