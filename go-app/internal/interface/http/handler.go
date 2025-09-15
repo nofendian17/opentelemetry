@@ -41,11 +41,10 @@ func (h *Handler) SetupRoutes() http.Handler {
 	router := routes.NewRouter(h.userService, h.appService)
 	router.RegisterRoutes(mux)
 
-	// Create middleware chain
+	// Create middleware chain with config
 	middlewareChain := middleware.ChainMiddleware(
-		middleware.LoggingMiddleware,
-		middleware.TracingMiddleware(h.config.ServiceName),
-		middleware.MetricsMiddlewareFactory(h.telemetry),
+		middleware.LoggingMiddlewareWithConfig(h.config.LogBodies),
+		middleware.OtelHttpMiddleware("http.server"), // Replaces both tracing and the old metrics middleware
 		middleware.RecoveryMiddleware,
 		middleware.CORSMiddleware,
 	)
@@ -54,7 +53,7 @@ func (h *Handler) SetupRoutes() http.Handler {
 	return middlewareChain(mux)
 }
 
-// Start starts the HTTP server
+// StartWithAddr Start starts the HTTP server
 func (h *Handler) StartWithAddr(ctx context.Context, addr string) error {
 	// Set up HTTP routes with middleware
 	handler := h.SetupRoutes()

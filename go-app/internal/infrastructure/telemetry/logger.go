@@ -3,6 +3,7 @@ package telemetry
 import (
 	"context"
 	"log/slog"
+	"sync"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -17,11 +18,57 @@ const (
 	LevelError LogLevel = "error"
 )
 
+// Global variable to store the current log verbosity level
+var (
+	logVerbosity int
+	mu           sync.RWMutex
+)
+
+// SetLogVerbosity sets the global log verbosity level
+func SetLogVerbosity(verbosity int) {
+	mu.Lock()
+	defer mu.Unlock()
+	logVerbosity = verbosity
+}
+
+// GetLogVerbosity gets the current log verbosity level
+func GetLogVerbosity() int {
+	mu.RLock()
+	defer mu.RUnlock()
+	return logVerbosity
+}
+
+// shouldLogMessage determines if a message should be logged based on verbosity level
+func shouldLogMessage(level LogLevel) bool {
+	verbosity := GetLogVerbosity()
+
+	switch level {
+	case LevelError:
+		// Always log errors
+		return true
+	case LevelWarn:
+		// Log warnings when verbosity is 1 or higher
+		return verbosity >= 1
+	case LevelInfo:
+		// Log info messages only when verbosity is 2 (verbose)
+		return verbosity >= 2
+	default:
+		return verbosity >= 2
+	}
+}
+
 // Log logs a message with telemetry context at the given level.
 // If err is non-nil, it is recorded in the span and logged.
 func Log(ctx context.Context, level LogLevel, msg string, err error, attrs ...attribute.KeyValue) {
 	span := trace.SpanFromContext(ctx)
-	logAttrs := attrsToLogAttrs(attrs)
+
+	// For performance, only convert attributes when needed
+	var logAttrs []any
+	shouldLog := shouldLogMessage(level)
+
+	if shouldLog {
+		logAttrs = attrsToLogAttrs(attrs)
+	}
 
 	switch level {
 	case LevelError:
@@ -31,20 +78,26 @@ func Log(ctx context.Context, level LogLevel, msg string, err error, attrs ...at
 				span.RecordError(err, trace.WithAttributes(attrs...))
 			}
 		}
-		if err != nil {
+		if err != nil && shouldLog {
 			logAttrs = append(logAttrs, slog.String("error", err.Error()))
 		}
-		slog.ErrorContext(ctx, msg, logAttrs...)
+		if shouldLog {
+			slog.ErrorContext(ctx, msg, logAttrs...)
+		}
 	case LevelWarn:
 		if span.IsRecording() {
 			span.AddEvent(msg, trace.WithAttributes(attrs...))
 		}
-		slog.WarnContext(ctx, msg, logAttrs...)
+		if shouldLog {
+			slog.WarnContext(ctx, msg, logAttrs...)
+		}
 	default:
 		if span.IsRecording() {
 			span.AddEvent(msg, trace.WithAttributes(attrs...))
 		}
-		slog.InfoContext(ctx, msg, logAttrs...)
+		if shouldLog {
+			slog.InfoContext(ctx, msg, logAttrs...)
+		}
 	}
 }
 
