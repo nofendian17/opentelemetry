@@ -25,14 +25,34 @@
       },
       "targets": [
         {
-          "expr": "rate(http_server_requests_total[5m])",
-          "legendFormat": "req/s"
+          "expr": "sum(rate(http_server_duration_count[5m]))",
+          "legendFormat": "req/s",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        }
+      }
     },
     {
       "type": "stat",
-      "title": "Error Rate (5xx / s)",
+      "title": "Error Rate (%)",
       "id": 2,
       "gridPos": {
         "x": 6,
@@ -42,14 +62,42 @@
       },
       "targets": [
         {
-          "expr": "rate(http_server_errors_total[5m])",
-          "legendFormat": "errors/s"
+          "expr": "sum(rate(http_server_duration_count{http_status_code=~\"5.*\"}[5m])) / sum(rate(http_server_duration_count[5m])) * 100",
+          "legendFormat": "error %",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        }
+      }
     },
     {
       "type": "stat",
-      "title": "Inflight Requests",
+      "title": "Active Requests",
       "id": 3,
       "gridPos": {
         "x": 12,
@@ -59,13 +107,17 @@
       },
       "targets": [
         {
-          "expr": "sum(http_server_inflight_requests)"
+          "expr": "sum(http_server_active_requests)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
       ]
     },
     {
       "type": "stat",
-      "title": "P95 Latency (s)",
+      "title": "P95 Latency (ms)",
       "id": 4,
       "gridPos": {
         "x": 16,
@@ -75,141 +127,288 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))"
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_duration_bucket[5m]))) * 1000",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      }
     },
     {
       "type": "timeseries",
-      "title": "Request Duration Histogram (avg)",
+      "title": "Request Duration Histogram",
       "id": 5,
       "gridPos": {
         "x": 0,
         "y": 4,
-        "w": 10,
+        "w": 12,
         "h": 8
       },
       "targets": [
         {
-          "expr": "rate(http_server_request_duration_seconds_sum[5m]) / rate(http_server_request_duration_seconds_count[5m])",
-          "legendFormat": "avg latency"
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_duration_bucket[5m]))) * 1000",
+          "legendFormat": "p50",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "histogram_quantile(0.90, sum by (le) (rate(http_server_duration_bucket[5m]))) * 1000",
+          "legendFormat": "p90",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_duration_bucket[5m]))) * 1000",
+          "legendFormat": "p95",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_duration_bucket[5m]))) * 1000",
+          "legendFormat": "p99",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "axisCenteredZero": false,
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "vis": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          }
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        }
+      }
     },
     {
       "type": "timeseries",
-      "title": "Requests by Route",
+      "title": "Request Rate by Route",
       "id": 6,
       "gridPos": {
-        "x": 10,
+        "x": 12,
         "y": 4,
-        "w": 14,
+        "w": 12,
         "h": 8
       },
       "targets": [
         {
-          "expr": "sum by (http_route) (rate(http_server_requests_total[5m]))",
-          "legendFormat": "{{http_route}}"
+          "expr": "sum by (http_route) (rate(http_server_duration_count[5m]))",
+          "legendFormat": "{{http_route}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      }
     },
     {
       "type": "timeseries",
-      "title": "Runtime: Goroutines",
+      "title": "Span Rate from Tempo",
       "id": 7,
       "gridPos": {
         "x": 0,
         "y": 12,
-        "w": 8,
-        "h": 6
+        "w": 12,
+        "h": 8
       },
       "targets": [
         {
-          "expr": "go_runtime_go_goroutines"
+          "expr": "sum by (service_name) (rate(tempo_spanmetrics_latency_count[5m]))",
+          "legendFormat": "{{service_name}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      },
+      "options": {
+        "tooltip": {
+          "mode": "single"
+        },
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      }
     },
     {
-      "type": "timeseries",
-      "title": "Runtime: GC Pauses (s)",
+      "type": "timeseries", 
+      "title": "Service Graph - Request Rate",
       "id": 8,
       "gridPos": {
-        "x": 8,
+        "x": 12,
         "y": 12,
-        "w": 8,
-        "h": 6
+        "w": 12,
+        "h": 8
       },
       "targets": [
         {
-          "expr": "rate(go_runtime_gc_pause_total_seconds_sum[5m])"
+          "expr": "sum by (client, server) (rate(tempo_service_graph_request_total[5m]))",
+          "legendFormat": "{{client}} -> {{server}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      }
     },
     {
-      "type": "timeseries",
-      "title": "Runtime: Heap / Alloc (bytes)",
+      "type": "table",
+      "title": "Service Dependencies",
       "id": 9,
       "gridPos": {
-        "x": 16,
-        "y": 12,
-        "w": 8,
-        "h": 6
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 8
       },
       "targets": [
         {
-          "expr": "go_runtime_memory_heap_alloc_bytes",
-          "legendFormat": "heap_alloc"
+          "expr": "sum by (client, server) (rate(tempo_service_graph_request_total[5m]))",
+          "format": "table",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true
+            },
+            "indexByName": {},
+            "renameByName": {
+              "client": "Client Service",
+              "server": "Server Service",
+              "Value": "Request Rate (req/s)"
+            }
+          }
         }
       ]
     },
     {
-      "type": "table",
-      "title": "Errors by Route (5xx)",
+      "type": "nodeGraph",
+      "title": "Service Graph",
       "id": 10,
       "gridPos": {
-        "x": 0,
-        "y": 18,
-        "w": 12,
-        "h": 6
-      },
-      "targets": [
-        {
-          "expr": "sum by (http_route) (increase(http_server_errors_total[15m]))",
-          "legendFormat": "{{http_route}}"
-        }
-      ]
-    },
-    {
-      "type": "table",
-      "title": "Latency Percentiles",
-      "id": 11,
-      "gridPos": {
         "x": 12,
-        "y": 18,
+        "y": 20,
         "w": 12,
-        "h": 6
+        "h": 8
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
-          "legendFormat": "p50"
-        },
-        {
-          "expr": "histogram_quantile(0.90, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
-          "legendFormat": "p90"
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
-          "legendFormat": "p95"
-        },
-        {
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket[5m])))",
-          "legendFormat": "p99"
+          "expr": "sum by (client, server) (rate(tempo_service_graph_request_total[5m]))",
+          "format": "table",
+          "instant": true,
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          }
         }
-      ]
+      ],
+      "options": {
+        "nodes": {
+          "mainStatUnit": "short",
+          "secondaryStatUnit": "short",
+          "arcs": [
+            {
+              "field": "Value",
+              "color": "green"
+            }
+          ]
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "nodeOptions": {
+              "mainStatUnit": "short",
+              "secondaryStatUnit": "short",
+              "arcs": [
+                {
+                  "field": "Value",
+                  "color": "green"
+                }
+              ]
+            }
+          }
+        }
+      }
     },
     {
-      "id": 12,
+      "id": 11,
       "type": "timeseries",
       "title": "Log Rate",
       "datasource": {
@@ -220,7 +419,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 24
+        "y": 28
       },
       "targets": [
         {
@@ -234,7 +433,7 @@
       ]
     },
     {
-      "id": 13,
+      "id": 12,
       "type": "logs",
       "title": "Recent Logs",
       "datasource": {
@@ -245,7 +444,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 24
+        "y": 28
       },
       "targets": [
         {
@@ -260,11 +459,14 @@
       "options": {
         "showLabels": true,
         "showTime": true,
-        "sortOrder": "Descending"
+        "sortOrder": "Descending",
+        "wrapLogMessage": false,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true
       }
     },
     {
-      "id": 14,
+      "id": 13,
       "type": "traces",
       "title": "Recent Traces",
       "datasource": {
@@ -275,7 +477,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 32
+        "y": 36
       },
       "targets": [
         {
@@ -294,7 +496,9 @@
   "tags": [
     "opentelemetry",
     "go",
-    "demo"
+    "demo",
+    "tempo",
+    "service-graph"
   ],
   "templating": {
     "list": []
@@ -305,6 +509,6 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Go Service Observability",
-  "version": 2
+  "title": "Go Service Observability with Service Graph",
+  "version": 3
 }

@@ -25,6 +25,8 @@ overrides:
   # Add ingestion limits
   ingestion_burst_size_bytes: 5000000  # 5MB burst size
   ingestion_rate_limit_bytes: 2000000  # 2MB/s rate limit
+  # Enable metrics generator for all tenants
+  metrics_generator_ring_size: 1
 
 compactor:
   compaction:
@@ -44,5 +46,23 @@ metrics_generator:
   registry:
     external_labels:
       source: tempo
+      cluster: docker-compose
   storage:
     path: /var/tempo/generator
+  traces_storage:
+    path: /var/tempo/generator/traces
+  processor:
+    service_graphs:
+      histogram_buckets: [0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6.4, 12.8]
+      dimensions:
+        - http.method
+        - http.target
+        - http.status_code
+        - service.version
+    span_metrics:
+      histogram_buckets: [0.002, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1.0, 2.5, 5.0, 7.5, 10.0]
+      dimensions:
+        - service.name
+        - span.name
+        - span.kind
+        - status.code
