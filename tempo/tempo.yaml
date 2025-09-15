@@ -10,18 +10,26 @@ distributor:
           endpoint: 0.0.0.0:4317
         http:
           endpoint: 0.0.0.0:4318
+  # Limit individual attribute size to prevent memory issues
   max_attribute_bytes: 2048
 
-memberlist:
-  abort_if_cluster_join_fails: false
-  join_members: [ "127.0.0.1" ]
-
-
+# Optimize ingester memory usage
 ingester:
-  trace_idle_period: 1s
-  max_block_bytes: 26214400
-  max_block_duration: 5m
-  complete_block_timeout: 10m
+  trace_idle_period: 5s              # Flush idle traces faster
+  max_block_bytes: 104857600         # 100MB max block size (reduced from default)
+  max_block_duration: 5m             # 5 minutes (already set)
+
+# Add limits to prevent memory issues
+overrides:
+  metrics_generator_processors: [ service-graphs, span-metrics, local-blocks ]
+  # Add ingestion limits
+  ingestion_burst_size_bytes: 5000000  # 5MB burst size
+  ingestion_rate_limit_bytes: 2000000  # 2MB/s rate limit
+
+compactor:
+  compaction:
+    # Set retention to prevent unlimited growth
+    block_retention: 6h  # 6 hours retention for testing
 
 storage:
   trace:
@@ -30,15 +38,11 @@ storage:
       path: /var/tempo
     wal:
       path: /var/tempo/wal
+    search: { }
 
-compactor:
-  compaction:
-    block_retention: 6h
-    max_compaction_objects: 1000000
-
-overrides:
-  metrics_generator_processors: [ service-graphs, span-metrics, local-blocks ]
-  ingestion_burst_size_bytes: 2000000
-  ingestion_rate_limit_bytes: 1000000
-  max_traces_per_user: 1000
-  max_bytes_per_trace: 500000
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+  storage:
+    path: /var/tempo/generator
