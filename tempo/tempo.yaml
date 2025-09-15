@@ -10,13 +10,26 @@ distributor:
           endpoint: 0.0.0.0:4317
         http:
           endpoint: 0.0.0.0:4318
+  # Limit individual attribute size to prevent memory issues
+  max_attribute_bytes: 2048
+
+# Optimize ingester memory usage
 ingester:
-  # Block kecil biar cepat kelihatan datanya
-  max_block_duration: 5m
+  trace_idle_period: 5s              # Flush idle traces faster
+  max_block_bytes: 104857600         # 100MB max block size (reduced from default)
+  max_block_duration: 5m             # 5 minutes (already set)
+
+# Add limits to prevent memory issues
+overrides:
+  metrics_generator_processors: [ service-graphs, span-metrics, local-blocks ]
+  # Add ingestion limits
+  ingestion_burst_size_bytes: 5000000  # 5MB burst size
+  ingestion_rate_limit_bytes: 2000000  # 2MB/s rate limit
 
 compactor:
   compaction:
-    block_retention: 2160h
+    # Set retention to prevent unlimited growth
+    block_retention: 168h  # 1 week
 
 storage:
   trace:
@@ -25,10 +38,7 @@ storage:
       path: /var/tempo
     wal:
       path: /var/tempo/wal
-    search: { }   # <-- ini yang enable trace search
-
-overrides:
-  metrics_generator_processors: [ service-graphs, span-metrics, local-blocks ]
+    search: { }
 
 metrics_generator:
   registry:
