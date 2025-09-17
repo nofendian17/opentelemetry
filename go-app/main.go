@@ -35,6 +35,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize telemetry: %v", err)
 	}
+	
+	// Set log verbosity from config
+	telemetry.SetLogVerbosity(cfg.Otel.LogVerbosity)
 	defer func() {
 		// Create a separate context for shutdown with a timeout
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

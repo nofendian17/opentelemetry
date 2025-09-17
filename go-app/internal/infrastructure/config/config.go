@@ -22,6 +22,8 @@ type OtelConfig struct {
 	Protocol           string
 	Endpoint           string
 	Insecure           bool
+	Username           string
+	Password           string
 	AppPort            string
 	LogVerbosity       int
 	TracerName         string
@@ -138,6 +140,8 @@ func LoadConfig() Config {
 			Protocol:           viper.GetString("OTEL_EXPORTER_OTLP_PROTOCOL"),
 			Endpoint:           viper.GetString("OTEL_EXPORTER_OTLP_ENDPOINT"),
 			Insecure:           viper.GetBool("OTEL_EXPORTER_OTLP_INSECURE"),
+			Username:           viper.GetString("OTEL_EXPORTER_OTLP_USERNAME"),
+			Password:           viper.GetString("OTEL_EXPORTER_OTLP_PASSWORD"),
 			AppPort:            viper.GetString("APP_PORT"),
 			LogVerbosity:       viper.GetInt("OTEL_LOG_VERBOSITY"),
 			TracerName:         viper.GetString("OTEL_TRACER_NAME"),

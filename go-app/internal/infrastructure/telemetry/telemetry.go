@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -109,6 +110,19 @@ func Setup(ctx context.Context, cfg config.Config) (*Telemetry, func(context.Con
 		traceOpts := []otlptracehttp.Option{otlptracehttp.WithEndpoint(cfg.Otel.Endpoint)}
 		metricOpts := []otlpmetrichttp.Option{otlpmetrichttp.WithEndpoint(cfg.Otel.Endpoint)}
 		logOpts := []otlploghttp.Option{otlploghttp.WithEndpoint(cfg.Otel.Endpoint)}
+
+		// Add basic auth headers if credentials are provided
+		if cfg.Otel.Username != "" && cfg.Otel.Password != "" {
+			auth := cfg.Otel.Username + ":" + cfg.Otel.Password
+			encodedAuth := base64.StdEncoding.EncodeToString([]byte(auth))
+			headers := map[string]string{
+				"Authorization": "Basic " + encodedAuth,
+			}
+			traceOpts = append(traceOpts, otlptracehttp.WithHeaders(headers))
+			metricOpts = append(metricOpts, otlpmetrichttp.WithHeaders(headers))
+			logOpts = append(logOpts, otlploghttp.WithHeaders(headers))
+		}
+
 		if cfg.Otel.Insecure {
 			traceOpts = append(traceOpts, otlptracehttp.WithInsecure())
 			metricOpts = append(metricOpts, otlpmetrichttp.WithInsecure())
